@@ -1,0 +1,28 @@
+name: NWTelegram Photo to PDF Bot
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"   # restarts every 30 minutes; workflow relaunches
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python bot.py
