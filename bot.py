@@ -1,84 +1,47 @@
 import os
-from PIL import Image
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, CommandHandler
+from fpdf import FPDF
 
-TEMP_DIR = "downloads"
-os.makedirs(TEMP_DIR, exist_ok=True)
+# Start command
+def start(update: Update, context):
+    update.message.reply_text("Send me any photo and I will convert it into a PDF for you! 📄🖼️")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send me photos (one or many). When finished, send /makepdf to get a single PDF.")
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Usage:\n1) Send photos (any order).\n2) Send /makepdf — I'll reply with a PDF.\n3) Send /clear to remove saved photos.")
-
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_dir = os.path.join(TEMP_DIR, str(user_id))
-    os.makedirs(user_dir, exist_ok=True)
-
+# Photo handler
+def photo_handler(update: Update, context):
     photo = update.message.photo[-1]
-    file = await photo.get_file()
-    file_path = os.path.join(user_dir, f"{file.file_id}.jpg")
-    await file.download_to_drive(file_path)
+    file = context.bot.get_file(photo.file_id)
 
-    await update.message.reply_text("Saved photo. Send more or /makepdf when ready.")
+    image_path = "image.jpg"
+    pdf_path = "output.pdf"
 
-async def make_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_dir = os.path.join(TEMP_DIR, str(user_id))
-    pdf_path = os.path.join(user_dir, "output.pdf")
+    file.download(image_path)
 
-    if not os.path.isdir(user_dir):
-        await update.message.reply_text("No photos found. Send some photos first.")
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.image(image_path, x=10, y=10, w=180)
+    pdf.output(pdf_path, "F")
+
+    update.message.reply_document(open(pdf_path, "rb"))
+
+    os.remove(image_path)
+    os.remove(pdf_path)
+
+# Main function
+def main():
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    if not BOT_TOKEN:
+        print("Error: BOT_TOKEN not set in environment!")
         return
 
-    images = []
-    for fname in sorted(os.listdir(user_dir)):
-        if fname.lower().endswith(('.jpg', '.jpeg', '.png')):
-            img = Image.open(os.path.join(user_dir, fname)).convert('RGB')
-            images.append(img)
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    if not images:
-        await update.message.reply_text("No photos found. Send some photos first.")
-        return
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo, photo_handler))
 
-    images[0].save(pdf_path, save_all=True, append_images=images[1:])
-    await update.message.reply_document(document=open(pdf_path, 'rb'))
-
-async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_dir = os.path.join(TEMP_DIR, str(user_id))
-    if os.path.isdir(user_dir):
-        for f in os.listdir(user_dir):
-            try:
-                os.remove(os.path.join(user_dir, f))
-            except Exception:
-                pass
-        await update.message.reply_text("Cleared your saved photos.")
-    else:
-        await update.message.reply_text("Nothing to clear.")
-
-async def main():
-    TOKEN = os.getenv('BOT_TOKEN')
-    if not TOKEN:
-        raise RuntimeError('BOT_TOKEN environment variable not set')
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler('help', help_command))
-    app.add_handler(CommandHandler('makepdf', make_pdf))
-    app.add_handler(CommandHandler('clear', clear))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-
-    await app.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    import asyncio
-    try:
-        asyncio.get_event_loop().run_until_complete(main())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(main())
+    main()
