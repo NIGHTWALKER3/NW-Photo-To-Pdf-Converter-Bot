@@ -1,4 +1,4 @@
-name: NWTelegram Photo to PDF Bot
+name: Telegram Photo to PDF Bot
 
 on:
   push:
