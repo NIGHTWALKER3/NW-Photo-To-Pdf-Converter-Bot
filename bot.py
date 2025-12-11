@@ -2,7 +2,7 @@
 import os
 import traceback
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram import Update, InputMediaPhoto
+from telegram import Update, InputMediaPhoto, ParseMode
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 
@@ -42,7 +42,7 @@ def safe_remove(path):
     try:
         if path and os.path.exists(path):
             os.remove(path)
-    except Exception:
+    except:
         pass
 
 def compress_image(input_path, quality):
@@ -57,7 +57,7 @@ def compress_image(input_path, quality):
         img.save(out_path, "JPEG", quality=int(quality))
         img.close()
         return out_path
-    except Exception:
+    except:
         return input_path
 
 def apply_watermark_to_image(input_path, watermark_text, pos):
@@ -73,7 +73,7 @@ def apply_watermark_to_image(input_path, watermark_text, pos):
         font_size = max(14, w // 20)
         try:
             font = ImageFont.truetype("DejaVuSans.ttf", font_size)
-        except Exception:
+        except:
             font = ImageFont.load_default()
 
         lines = watermark_text.split("\n")
@@ -112,8 +112,33 @@ def apply_watermark_to_image(input_path, watermark_text, pos):
         img.close()
         result.close()
         return out_path
-    except Exception:
+    except:
         return input_path
+
+# ---------- HELP COMMAND ----------
+def help_command(update: Update, context):
+    help_text = (
+        "<b>📘 How to Use This Bot</b>\n\n"
+        "<b>/start</b> – Start the bot\n"
+        "<b>/makepdf</b> – Convert your uploaded photos into a single PDF\n"
+        "<b>/clear</b> – Clear saved photos & reset settings\n"
+        "<b>/name &lt;filename&gt;</b> – Set custom PDF name\n"
+        "<b>/watermark &lt;text&gt;</b> – Add watermark\n"
+        "<b>/watermark_pos &lt;br|center|tl&gt;</b> – Set watermark position\n"
+        "<b>/compress &lt;1–95&gt;</b> – Set compression quality\n"
+        "<b>/pagesize &lt;A3|A4|A5|Letter|Legal|Tabloid&gt;</b>\n"
+        "<b>/preview</b> – Preview uploaded photos\n"
+        "<b>/delete_last</b> – Delete latest photo\n"
+        "<b>/remove N</b> – Remove Nth photo\n"
+        "<b>/move A B</b> – Move photo position\n"
+        "<b>/settings</b> – View current settings\n"
+        "<b>/help</b> – Show this help message\n\n"
+        "📌 <b>Steps:</b>\n"
+        "1️⃣ Send photos\n"
+        "2️⃣ Use /makepdf to generate PDF\n"
+        "3️⃣ Everything resets automatically after PDF\n"
+    )
+    update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
 # ---------- Command handlers ----------
 def start(update: Update, context):
@@ -121,19 +146,7 @@ def start(update: Update, context):
     ensure_user(uid)
     update.message.reply_text(
         "Welcome! Send me photos and I'll convert them into a single PDF.\n\n"
-        "Main commands:\n"
-        "/makepdf - Combine saved photos into PDF\n"
-        "/clear - Clear saved photos & settings\n"
-        "/name <filename>\n"
-        "/watermark <text>\n"
-        "/watermark_pos <br|center|tl>\n"
-        "/compress <quality>\n"
-        "/pagesize <A3|A4|A5|Letter|Legal|Tabloid>\n"
-        "/preview - preview saved photos\n"
-        "/delete_last\n"
-        "/remove <num>\n"
-        "/move <from> <to>\n"
-        "/settings - view settings"
+        "Use /help to see all commands."
     )
 
 def settings(update: Update, context):
@@ -194,7 +207,7 @@ def set_compress(update: Update, context):
         q = int(arg)
         if q < 1 or q > 95:
             raise ValueError()
-    except Exception:
+    except:
         update.message.reply_text("Usage: /compress <1-95>")
         return
     user_settings[uid]['compress_quality'] = q
@@ -382,7 +395,6 @@ def makepdf(update: Update, context):
         update.message.reply_text("PDF failed.")
 
     finally:
-        # cleanup photos
         for p in user_photos.get(uid, []):
             safe_remove(p)
             safe_remove(p + ".cmp.jpg")
@@ -393,10 +405,7 @@ def makepdf(update: Update, context):
 
         safe_remove(f"{filename}.pdf")
 
-        # reset photos
         user_photos[uid] = []
-
-        # reset settings (your request)
         user_settings[uid] = {
             "name": f"{uid}_output",
             "watermark_text": None,
@@ -416,6 +425,7 @@ def main():
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("settings", settings))
     dp.add_handler(CommandHandler("name", set_name))
     dp.add_handler(CommandHandler("watermark", set_watermark))
